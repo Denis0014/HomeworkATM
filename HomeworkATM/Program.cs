@@ -4,6 +4,7 @@ using System.Text;
 
 namespace HomeworkATM
 {
+    #region Card
     /// <summary>
     /// Клаас банковской карты
     /// </summary>
@@ -49,6 +50,8 @@ namespace HomeworkATM
         /// </summary>
         public override string ToString() => $"Number: {Number}, Name: {Name}, Validity: {Validity.month}/{Validity.year}, Bank: {Bank}, Sum: {Sum}";
     }
+    #endregion
+    #region ATM
     /// <summary>
     /// Класс банкомата
     /// </summary>
@@ -141,6 +144,7 @@ namespace HomeworkATM
             history.Add($"{DateTime.Now}, {card.Number}: Пополнение {sum} => Карта успешно пополнена! Налог: {tax}%");
             return true;
         }
+        #region Withdraw
         /// <summary>
         /// Снятие наличных с карты
         /// </summary>
@@ -200,6 +204,13 @@ namespace HomeworkATM
             history.Add($"{DateTime.Now}, {card.Number}: Снятие {sum} => Снятие прошло успешно! Налог: {tax}%");
             return true;
         }
+        #endregion
+        #region Pickup
+        /// <summary>
+        /// Обслуживание автомата
+        /// </summary>
+        /// <param name="keyGet">Секретный ключ</param>
+        /// <returns>Успех проведённой операции</returns>
         public bool Pickup(string keyGet)
         {
             StringBuilder keyBuilder = new StringBuilder(keyGet);
@@ -228,7 +239,9 @@ namespace HomeworkATM
                 return false;
             }
         }
+        #endregion
     }
+    #endregion
     internal class Program
     {
         static void Main(string[] args)
