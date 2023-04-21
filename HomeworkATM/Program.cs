@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net.Cache;
+using System.Reflection.Emit;
 using System.Text;
 
 namespace HomeworkATM
@@ -108,9 +109,13 @@ namespace HomeworkATM
         /// </summary>
         private List<string> history = new List<string>();
         /// <summary>
-        /// Секретный ключ для валидации инкассаторов - фиксированная строка 👻
+        /// Сюда будут записываться всё серии упюр, которые держит в себе автомат
         /// </summary>
-        private string key = "ghost";
+        private HashSet<string> magazine = new HashSet<string>();
+        /// <summary>
+        /// Секретный ключ для валидации инкассаторов - фиксированная строка
+        /// </summary>
+        private string key = "74306199653196";
         /// <summary>
         /// Конструктор класса
         /// </summary>
@@ -128,6 +133,7 @@ namespace HomeworkATM
         /// </summary>
         /// <returns>Целое цисло деняг</returns>
         public int CashAmount() => cassette.Sum(x => x.Key * x.Value.Count);
+
         #region Кeplenish
         /// <summary>
         /// Пополнение карты
@@ -139,13 +145,43 @@ namespace HomeworkATM
         {
             double tax = 0;
             int sum = 0;
-            foreach (var banknote in cash)
+            var magazineTemp = magazine;
+            foreach (var banknotes in cash)
             {
-                if (!nominals.Contains(banknote.Key))
+                if (!nominals.Contains(banknotes.Key))
                 {
-                    history.Add($"{DateTime.Now}, {card.Number}: Пополнение 0 => Неверный наминал купюры: {banknote.Key}!");
-                    Console.WriteLine($"Неверный наминал купюры: {banknote.Key}! Пополнение будет завершино");
+                    history.Add($"{DateTime.Now}, {card.Number}: Пополнение 0 => Неверный наминал купюры: {banknotes.Key}!");
+                    Console.WriteLine($"Неверный наминал купюры: {banknotes.Key}! Пополнение будет завершино");
                     return false;
+                }
+                foreach (var banknote in banknotes.Value)
+                {
+                    if (magazine.Contains(banknote.Series))
+                    {
+                        history.Add($"{DateTime.Now}, {card.Number}: Пополнение 0 => Обнаружена купюры с одинаковыми сериями: {banknote.Series}!");
+                        Console.WriteLine($"Неверная серия купюры! Пополнение будет завершино");
+                        return false;
+                    }
+                    var dist = (Math.Abs(char.ToLower(banknote.Series[0]) - char.ToLower(banknote.Series[1])) - 1);
+                    if (banknotes.Key >= 1000)
+                    {
+                        if (dist % 2 != 0 && dist != -1 || banknote.Series.Skip(2).Sum(x => int.Parse(x + "")) % 2 == 0)
+                        {
+                            history.Add($"{DateTime.Now}, {card.Number}: Пополнение 0 => Неверная серия купюры: {banknote.Series}!");
+                            Console.WriteLine($"Неверная серия купюры! Пополнение будет завершино");
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        if (dist % 2 == 0 || dist == -1 || banknote.Series.Skip(2).Sum(x => int.Parse(x + "")) % 2 != 0)
+                        {
+                            history.Add($"{DateTime.Now}, {card.Number}: Пополнение 0 => Неверная серия купюры: {banknote.Series}!");
+                            Console.WriteLine($"Неверная серия купюры! Пополнение будет завершино");
+                            return false;
+                        }
+                    }
+                    magazineTemp.Add(banknote.Series);
                 }
             }
             if (card.Validity.year < DateTime.Now.Year || card.Validity.year == DateTime.Now.Year && card.Validity.month < DateTime.Now.Month)
@@ -172,6 +208,7 @@ namespace HomeworkATM
                 }
             }
             card.Sum += (int)Math.Round(sum * (1 - tax));
+            magazine = magazineTemp;
             Console.WriteLine($"Карта успешно пополнена!");
             history.Add($"{DateTime.Now}, {card.Number}: Пополнение {sum} => Карта успешно пополнена! Налог: {tax}%");
             return true;
@@ -187,7 +224,9 @@ namespace HomeworkATM
         public bool Withdraw(Card card, int sum)
         {
             double tax = 0;
-            var temp = cassette;
+            var sumTemp = sum;
+            var cassetteTemp = cassette;
+            var magazineTemp = magazine;
             if (card.Validity.year < DateTime.Now.Year || card.Validity.year == DateTime.Now.Year && card.Validity.month < DateTime.Now.Month)
             {
                 history.Add($"{DateTime.Now}, {card.Number}: Снятие 0 => Истёк срок карты ({card.Validity.month}/{card.Validity.year})!");
@@ -230,9 +269,13 @@ namespace HomeworkATM
                     Console.WriteLine("Терминал не может выдать такую сумму! Снятие будет завершино");
                     return false;
                 }
-                sum -= banknoteNominal;
-                cassette[banknoteNominal].Pop();
+                sumTemp -= banknoteNominal;
+                magazineTemp.Remove(cassetteTemp[banknoteNominal].Peek().Series);
+                cassetteTemp[banknoteNominal].Pop();
             }
+            sum = sumTemp;
+            cassette = cassetteTemp;
+            magazine = magazineTemp;
             Console.WriteLine($"Снятие прошло успешно!");
             history.Add($"{DateTime.Now}, {card.Number}: Снятие {sum} => Снятие прошло успешно! Налог: {tax}%");
             return true;
@@ -246,9 +289,9 @@ namespace HomeworkATM
         /// <returns>Успех проведённой операции</returns>
         public bool Pickup(string keyGet)
         {
-            StringBuilder keyBuilder = new StringBuilder(keyGet);
-            for (int i = 0; i < keyBuilder.Length; i++)
-                keyBuilder[i] = (char)(((int)keyBuilder[i] - 4) > 97 ? (int)keyBuilder[i] - 4 : 22 + (int)keyBuilder[i]);
+            string keyBuilder = "";
+            for (int i = 0; i < keyGet.Length - 2; i++)
+                keyBuilder += (int.Parse(keyGet[i] + "") + int.Parse(keyGet[i + 1] + "") + int.Parse(keyGet[i + 2] + "")) % 10;
             if (keyBuilder.Equals(key))
             {
                 Console.WriteLine($"Ключ верен");
@@ -256,6 +299,7 @@ namespace HomeworkATM
                 history.Clear();
                 Console.WriteLine($"История очищена");
                 cassette.Clear();
+                magazine.Clear();
                 cassette.Add(100, new Stack<Banknote>());
                 cassette.Add(200, new Stack<Banknote>());
                 cassette.Add(500, new Stack<Banknote>());
@@ -264,10 +308,24 @@ namespace HomeworkATM
                 cassette.Add(5000, new Stack<Banknote>());
                 for (int i = 10000; i > 0; i--)
                 {
-                    foreach (var banknote in cassette)
+                    foreach (var banknotes in cassette)
                     {
-                        if (i % banknote.Key == 0)
-                            banknote.Value.Push(new Banknote(banknote.Key, (char)rnd.Next(65, 90) + (char)rnd.Next(65, 90) + rnd.Next(1, 999999999).ToString()));
+                        if (i % banknotes.Key == 0)
+                        {
+                            a: var c1 = (char)rnd.Next(65, 90);
+                            var c2 = (char)rnd.Next(65, 90);
+                            var series = "";
+                            for (int j = 1; j <= 9; j++)
+                                series += rnd.Next(0, 9);
+                            var dist = (Math.Abs(c1 - c2) - 1);
+                            series = c1.ToString() + c2.ToString() + series;
+                            if (((banknotes.Key >= 1000) == (dist % 2 != 0 && dist != -1 || series.Skip(2).Sum(x => int.Parse(x + "")) % 2 == 0)) || magazine.Contains(series))
+                            {
+                                goto a;
+                            }
+                            banknotes.Value.Push(new Banknote(banknotes.Key, series));
+                            magazine.Add(series);
+                        }
                     }
                 }
                 Console.WriteLine($"Замена касеты прошла успешно");
@@ -289,10 +347,12 @@ namespace HomeworkATM
         {
             var cassette = new Dictionary<int, int>();
             var atm = new ATM("Bank", new Dictionary<int, Stack<Banknote>>());
-            atm.Pickup("klswx");
+            atm.Pickup("1428394874562349");
             Console.WriteLine(atm.CashAmount());
             var card = new Card("0000000000000000", "", 12, 2030, "Bank", 10000);
             atm.Withdraw(card, 5000);
         }
     }
 }
+/* В коде ОЧЕНЬ мого комментариев, так что вспомнитиь: что, где и как мне было просто;
+ * Во основном названия переменных – говорящие */
